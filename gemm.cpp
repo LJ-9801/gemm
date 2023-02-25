@@ -15,12 +15,12 @@
 // 1024 --> 8
 // 2048 --> 16
 #define N 512
-#define BLOCK 32 // 1 Gflops
+#define BLOCK 64 // 1 Gflops
 
 // aligned 32byte needed for _mm256_load_pd
-double __attribute__((aligned(32))) A[N*N];
-double __attribute__((aligned(32))) B[N*N];
-double __attribute__((aligned(32))) C[N*N];
+float __attribute__((aligned(32))) A[N*N];
+float __attribute__((aligned(32))) B[N*N];
+float __attribute__((aligned(32))) C[N*N];
 
 //#define THREADING 1
 
@@ -29,7 +29,7 @@ void readMatrices(std::ifstream& getA, std::ifstream& getB, std::ifstream& getC,
                   std::vector<double>& trueC);
 
 // check accuracy
-bool check(const double c[], const std::vector<double>& trueC);
+bool check(const float c[], const std::vector<double>& trueC);
 
 int main(int argc, char* argv[]){
     std::ifstream getA("A.txt");
@@ -59,13 +59,15 @@ int main(int argc, char* argv[]){
 
                 for(int it = i; it < mini; it++){
                     for(int jt = j; jt < minj; jt++){
-                        __m256d tmp = {0.0, 0.0, 0.0, 0.0}; 
-                        for(int kt = k; kt < mink; kt+=4){
-                            __m256d va = _mm256_load_pd(&A[it*N+kt]);
-                            __m256d vb = _mm256_load_pd(&B[jt*N+kt]);
-                            tmp = _mm256_fmadd_pd(va, vb, tmp);
+                        __m256 tmp = {}; 
+                        for(int kt = k; kt < mink; kt+=8){
+                            __m256 va = _mm256_load_ps(&A[it*N+kt]);
+                            __m256 vb = _mm256_load_ps(&B[jt*N+kt]);
+                            tmp = _mm256_fmadd_ps(va, vb, tmp);
                         }
-                        C[it*N+jt] += tmp[0] + tmp[1] + tmp[2] + tmp[3];
+                        // stupid way to sum the vector
+                        C[it*N+jt] += tmp[0] + tmp[1] + tmp[2] + tmp[3] + 
+                                        tmp[4] + tmp[5] + tmp[6] + tmp[7];
                     }
                 }
             }
@@ -101,7 +103,7 @@ void readMatrices(std::ifstream& getA, std::ifstream& getB, std::ifstream& getC,
     getC.close();
 }
 
-bool check(const double c[], const std::vector<double>& trueC){
+bool check(const float c[], const std::vector<double>& trueC){
     for(unsigned int i = 0; i<trueC.size(); i++){
         if(std::abs(c[i]-trueC[i]) > 1e-3){
             printf("mismatch at %d: %.5f != %.5f\n", i, c[i], trueC[i]);
